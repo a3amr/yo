@@ -1,14 +1,29 @@
 FROM python:3.11-slim
 
-# ffmpeg + node (لازم للـ POT provider)
-RUN apt-get update && apt-get install -y ffmpeg nodejs npm git && rm -rf /var/lib/apt/lists/*
+# ffmpeg للتحويل الصوتي + node/npm لسيرفر التوكن + git لسحب الأكواد
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    curl \
+    git \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# سحب سيرفر التوكن وبناءه
+RUN git clone https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /pot-provider \
+    && cd /pot-provider/server \
+    && npm install \
+    && npx tsc
+
+# باقي متطلبات المشروع
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ثبّت بروفايدر التوكن كـ plugin لـ yt-dlp
-RUN pip install --no-cache-dir bgutil-ytdlp-pot-provider
-
 COPY . .
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]
+
+# صلاحية تشغيل للسكربت
+RUN chmod +x start.sh
+
+CMD ["./start.sh"]
