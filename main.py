@@ -7,7 +7,7 @@ app = FastAPI()
 
 @app.get("/download")
 async def download_audio(url: str, background_tasks: BackgroundTasks):
-    # إعدادات متقدمة لإجبار yt-dlp على تخطي حظر الروبوتات
+    # إعدادات yt-dlp النهائية مع ملف الكوكيز الجاهز والصحيح (LF)
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': '%(id)s.%(ext)s',
@@ -16,11 +16,7 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
             'preferredcodec': 'm4a',
             'preferredquality': '192',
         }],
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web'],
-            }
-        },
+        'cookiefile': 'cookies.txt',  # قراءة الكوكيز لتجاوز حماية يوتيوب
         'quiet': True,
         'no_warnings': True
     }
@@ -30,6 +26,7 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
             info = ydl.extract_info(url, download=True)
             filename = f"{info['id']}.m4a"
 
+        # أمر لحذف الملف من سيرفر Render فور انتهاء إرساله للأيفون لتوفير المساحة
         background_tasks.add_task(os.remove, filename)
 
         return FileResponse(
