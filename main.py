@@ -14,7 +14,7 @@ ATTEMPTS = [
 ]
 
 def build_opts(outtmpl, client_conf):
-    opts = {
+    return {
         'format': '140/bestaudio[ext=m4a]/bestaudio/best',
         'outtmpl': outtmpl,
         'postprocessors': [{
@@ -31,10 +31,8 @@ def build_opts(outtmpl, client_conf):
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
+        # لا يوجد cookiefile هون خالص — بالاعتماد الكامل على PO Token
     }
-    if os.path.exists('cookies.txt'):
-        opts['cookiefile'] = 'cookies.txt'
-    return opts
 
 @app.get("/download")
 async def download_audio(url: str, background_tasks: BackgroundTasks):
