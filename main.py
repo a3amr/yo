@@ -5,16 +5,16 @@ import os
 
 app = FastAPI()
 
-# ترتيب المحاولات: كل واحدة إعداد مختلف، لو فشلت نجرب التالية
+PROXY_URL = os.environ.get("PROXY_URL")  # حطها من Render Environment Variables
+
 ATTEMPTS = [
     {"player_client": ["ios"]},
     {"player_client": ["android"]},
     {"player_client": ["web"]},
-    {"player_client": ["tv_embedded"]},
 ]
 
 def build_opts(outtmpl, client_conf):
-    return {
+    opts = {
         'format': '140/bestaudio[ext=m4a]/bestaudio/best',
         'outtmpl': outtmpl,
         'postprocessors': [{
@@ -24,15 +24,17 @@ def build_opts(outtmpl, client_conf):
         }],
         'extractor_args': {
             'youtube': client_conf,
-            'youtubepot-bgutilhttp': {
-                'base_url': 'http://127.0.0.1:4416'
-            }
+            'youtubepot-bgutilhttp': {'base_url': 'http://127.0.0.1:4416'}
         },
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
-        # لا يوجد cookiefile هون خالص — بالاعتماد الكامل على PO Token
     }
+    if PROXY_URL:
+        opts['proxy'] = PROXY_URL
+    if os.path.exists('cookies.txt'):
+        opts['cookiefile'] = 'cookies.txt'
+    return opts
 
 @app.get("/download")
 async def download_audio(url: str, background_tasks: BackgroundTasks):
@@ -48,7 +50,7 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
                 filename = f"{info['id']}.m4a"
 
             if not os.path.exists(filename):
-                raise Exception("الملف لم يُنشأ رغم عدم وجود خطأ ظاهر")
+                raise Exception("الملف لم يُنشأ")
 
             background_tasks.add_task(os.remove, filename)
             return FileResponse(
@@ -56,15 +58,10 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
                 filename=f"{info['title']}.m4a",
                 media_type='audio/mp4'
             )
-
         except Exception as e:
             last_error = str(e)
             if filename and os.path.exists(filename):
                 os.remove(filename)
-            continue  # جرب الإعداد التالي
+            continue
 
-    # لو كل المحاولات فشلت
-    raise HTTPException(
-        status_code=502,
-        detail=f"فشلت كل المحاولات. آخر خطأ: {last_error}"
-    )
+    raise HTTPException(status_code=502, detail=f"فشلت كل المحاولات. آخر خطأ: {last_error}")
