@@ -7,7 +7,7 @@ app = FastAPI()
 
 @app.get("/download")
 async def download_audio(url: str, background_tasks: BackgroundTasks):
-    # إعدادات yt-dlp مع الكوكيز وتعديل العميل الجديد لتجاوز الحظر
+    # إعدادات yt-dlp النهائية باستخدام عملاء الهواتف والتلفزيون المتعددة لتجاوز حظر يوتيوب
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': '%(id)s.%(ext)s',
@@ -16,10 +16,9 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
             'preferredcodec': 'm4a',
             'preferredquality': '192',
         }],
-        'cookiefile': 'cookies.txt',
         'extractor_args': {
             'youtube': {
-                'player_client': ['default', 'web_embedded'],
+                'player_client': ['android', 'ios', 'mweb', 'web_embedded'],
             }
         },
         'quiet': True,
@@ -31,6 +30,7 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
             info = ydl.extract_info(url, download=True)
             filename = f"{info['id']}.m4a"
 
+        # حذف الملف من سيرفر Render تلقائياً بعد إرساله لتوفير المساحة
         background_tasks.add_task(os.remove, filename)
 
         return FileResponse(
