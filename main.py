@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 import yt_dlp
 import os
@@ -7,7 +7,6 @@ app = FastAPI()
 
 @app.get("/download")
 async def download_audio(url: str, background_tasks: BackgroundTasks):
-    # إعدادات yt-dlp النهائية باستخدام عملاء الهواتف والتلفزيون المتعددة لتجاوز حظر يوتيوب
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': '%(id)s.%(ext)s',
@@ -19,18 +18,29 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'ios', 'mweb', 'web_embedded'],
+            },
+            # ربط yt-dlp بسيرفر التوكن الشغال محلياً جوا نفس الـ container
+            'youtubepot-bgutilhttp': {
+                'base_url': 'http://127.0.0.1:4416'
             }
         },
         'quiet': True,
-        'no_warnings': True
+        'no_warnings': True,
     }
 
+    # لو رفعت ملف كوكيز بالريبو (اختياري لكن بيرفع نسبة النجاح)
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
+
+    filename = None
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = f"{info['id']}.m4a"
 
-        # حذف الملف من سيرفر Render تلقائياً بعد إرساله لتوفير المساحة
+        if not os.path.exists(filename):
+            raise HTTPException(status_code=500, detail="فشل إنشاء الملف الصوتي بعد التحميل")
+
         background_tasks.add_task(os.remove, filename)
 
         return FileResponse(
@@ -39,5 +49,12 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
             media_type='audio/mp4'
         )
 
+    except yt_dlp.utils.DownloadError as e:
+        # هاد بالضبط وين بتطلع أخطاء "sign in to confirm" أو "reload the page"
+        raise HTTPException(status_code=502, detail=f"خطأ من يوتيوب: {str(e)}")
+
     except Exception as e:
-        return {"error": str(e)}
+        # تنظيف الملف لو تكون بالمنتصف وصار خطأ غير متوقع
+        if filename and os.path.exists(filename):
+            os.remove(filename)
+        raise HTTPException(status_code=500, detail=str(e))
