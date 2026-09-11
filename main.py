@@ -7,27 +7,25 @@ app = FastAPI()
 
 @app.get("/download")
 async def download_audio(url: str, background_tasks: BackgroundTasks):
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': '%(id)s.%(ext)s',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'm4a',
-            'preferredquality': '192',
-        }],
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios', 'mweb', 'web_embedded'],
-            },
-            # ربط yt-dlp بسيرفر التوكن الشغال محلياً جوا نفس الـ container
-            'youtubepot-bgutilhttp': {
-                'base_url': 'http://127.0.0.1:4416'
-            }
+ydl_opts = {
+    'format': 'bestaudio[ext=m4a]/bestaudio/best',
+    'outtmpl': '%(id)s.%(ext)s',
+    'postprocessors': [{
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'm4a',
+        'preferredquality': '192',
+    }],
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['ios', 'android'],
         },
-        'quiet': True,
-        'no_warnings': True,
-    }
-
+        'youtubepot-bgutilhttp': {
+            'base_url': 'http://127.0.0.1:4416'
+        }
+    },
+    'quiet': True,
+    'no_warnings': True,
+}
     # لو رفعت ملف كوكيز بالريبو (اختياري لكن بيرفع نسبة النجاح)
     if os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
