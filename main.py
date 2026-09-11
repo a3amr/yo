@@ -8,7 +8,7 @@ app = FastAPI()
 @app.get("/download")
 async def download_audio(url: str, background_tasks: BackgroundTasks):
     ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio/best',
+        'format': 'bestaudio/best',
         'outtmpl': '%(id)s.%(ext)s',
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
@@ -16,10 +16,6 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
             'preferredquality': '192',
         }],
         'extractor_args': {
-            'youtube': {
-                'player_client': ['ios', 'android'],
-            },
-            # ربط yt-dlp بسيرفر التوكن الشغال محلياً جوا نفس الـ container
             'youtubepot-bgutilhttp': {
                 'base_url': 'http://127.0.0.1:4416'
             }
@@ -28,7 +24,6 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
         'no_warnings': True,
     }
 
-    # لو رفعت ملف كوكيز بالريبو (اختياري لكن بيرفع نسبة النجاح)
     if os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
 
@@ -50,11 +45,9 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
         )
 
     except yt_dlp.utils.DownloadError as e:
-        # هاد بالضبط وين بتطلع أخطاء "sign in to confirm" أو "requested format is not available"
         raise HTTPException(status_code=502, detail=f"خطأ من يوتيوب: {str(e)}")
 
     except Exception as e:
-        # تنظيف الملف لو تكون بالمنتصف وصار خطأ غير متوقع
         if filename and os.path.exists(filename):
             os.remove(filename)
         raise HTTPException(status_code=500, detail=str(e))
