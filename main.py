@@ -5,49 +5,68 @@ import os
 
 app = FastAPI()
 
-@app.get("/download")
-async def download_audio(url: str, background_tasks: BackgroundTasks):
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': '%(id)s.%(ext)s',
+# ترتيب المحاولات: كل واحدة إعداد مختلف، لو فشلت نجرب التالية
+ATTEMPTS = [
+    {"player_client": ["ios"]},
+    {"player_client": ["android"]},
+    {"player_client": ["web"]},
+    {"player_client": ["tv_embedded"]},
+]
+
+def build_opts(outtmpl, client_conf):
+    opts = {
+        'format': '140/bestaudio[ext=m4a]/bestaudio/best',
+        'outtmpl': outtmpl,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'm4a',
-            'preferredquality': '192',
+            'preferredquality': '128',
         }],
         'extractor_args': {
+            'youtube': client_conf,
             'youtubepot-bgutilhttp': {
                 'base_url': 'http://127.0.0.1:4416'
             }
         },
         'quiet': True,
         'no_warnings': True,
+        'noplaylist': True,
     }
-
     if os.path.exists('cookies.txt'):
-        ydl_opts['cookiefile'] = 'cookies.txt'
+        opts['cookiefile'] = 'cookies.txt'
+    return opts
 
-    filename = None
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = f"{info['id']}.m4a"
+@app.get("/download")
+async def download_audio(url: str, background_tasks: BackgroundTasks):
+    outtmpl = '%(id)s.%(ext)s'
+    last_error = None
 
-        if not os.path.exists(filename):
-            raise HTTPException(status_code=500, detail="فشل إنشاء الملف الصوتي بعد التحميل")
+    for attempt in ATTEMPTS:
+        opts = build_opts(outtmpl, attempt)
+        filename = None
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = f"{info['id']}.m4a"
 
-        background_tasks.add_task(os.remove, filename)
+            if not os.path.exists(filename):
+                raise Exception("الملف لم يُنشأ رغم عدم وجود خطأ ظاهر")
 
-        return FileResponse(
-            path=filename,
-            filename=f"{info['title']}.m4a",
-            media_type='audio/mp4'
-        )
+            background_tasks.add_task(os.remove, filename)
+            return FileResponse(
+                path=filename,
+                filename=f"{info['title']}.m4a",
+                media_type='audio/mp4'
+            )
 
-    except yt_dlp.utils.DownloadError as e:
-        raise HTTPException(status_code=502, detail=f"خطأ من يوتيوب: {str(e)}")
+        except Exception as e:
+            last_error = str(e)
+            if filename and os.path.exists(filename):
+                os.remove(filename)
+            continue  # جرب الإعداد التالي
 
-    except Exception as e:
-        if filename and os.path.exists(filename):
-            os.remove(filename)
-        raise HTTPException(status_code=500, detail=str(e))
+    # لو كل المحاولات فشلت
+    raise HTTPException(
+        status_code=502,
+        detail=f"فشلت كل المحاولات. آخر خطأ: {last_error}"
+    )
