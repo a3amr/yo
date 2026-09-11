@@ -1,50 +1,39 @@
-import os
-import tempfile
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import FileResponse
 import yt_dlp
+import os
 
 app = FastAPI()
 
-@app.get("/")
-def home():
-    return {"status": "Server is running perfectly!"}
-
 @app.get("/download")
-async def download_audio(url: str = Query(..., description="YouTube Video URL")):
-    try:
-        temp_dir = tempfile.mkdtemp()
-        
-        ydl_opts = {
-            'format': 'm4a/bestaudio/best',
-            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'm4a',
-                'preferredquality': '192',
-            }],
-            'quiet': True,
-            'no_warnings': True,
-        }
+async def download_audio(url: str, background_tasks: BackgroundTasks):
+    # إعدادات yt-dlp شاملة ملف الكوكيز
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': '%(id)s.%(ext)s',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'm4a',
+            'preferredquality': '192',
+        }],
+        'cookiefile': 'cookies.txt',  # السطر المسؤول عن تجاوز حماية يوتيوب
+        'quiet': True,
+        'no_warnings': True
+    }
 
+    try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            base, _ = os.path.splitext(filename)
-            final_filename = f"{base}.m4a"
+            filename = f"{info['id']}.m4a"
 
-        if os.path.exists(final_filename):
-            return FileResponse(
-                path=final_filename,
-                media_type='audio/mp4',
-                filename=os.path.basename(final_filename)
-            )
-        else:
-            raise HTTPException(status_code=500, detail="File processing failed.")
+        # أمر برمجي لحذف الملف من السيرفر بعد تحميله على الأيفون لتوفير المساحة
+        background_tasks.add_task(os.remove, filename)
+
+        return FileResponse(
+            path=filename,
+            filename=f"{info['title']}.m4a",
+            media_type='audio/mp4'
+        )
 
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+        return {"error": str(e)}
