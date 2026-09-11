@@ -17,7 +17,7 @@ async def download_audio(url: str, background_tasks: BackgroundTasks):
             'preferredquality': '192',
         }],
         'cookiefile': 'cookies.txt',
-        'extractor_args': {'youtube': ['client=android']},  # الحل الجذري لتجاوز خطأ "The page needs to be reloaded"
+        'extractor_args': {'youtube': ['client=tv']},  # الحل الجذري لتجاوز خطأ "The page needs to be reloaded"
         'quiet': True,
         'no_warnings': True
     }
